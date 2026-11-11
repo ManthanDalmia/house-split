@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0D1413">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.v2.png">
+<title>House Split</title>
+<style>
+:root{--bg:#0D1413;--surface:#16201e;--line:#26332f;--ink:#e8f0ee;--soft:#93a6a1;--accent:#5eead4;--bad:#f87171;--good:#4ade80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 16px 40px}
+.wrap{max-width:520px;margin:0 auto}
+h1{font-size:1.4rem;margin:20px 0 4px} h2{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin:24px 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+input,select,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;width:100%}
+button{background:var(--accent);color:#04201b;border:0;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--soft);border:1px solid var(--line);width:auto;padding:6px 10px;font-weight:400}
+form{display:grid;gap:8px}
+.pos{color:var(--good)} .neg{color:var(--bad)} .soft{color:var(--soft);font-size:.85rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px} .chips label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:.85rem}
+.chips input{width:auto}
+.hide{display:none}
+.warn{background:#3a2a12;border:1px solid #6b4a14;border-radius:10px;padding:12px;font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🏠 House Split</h1>
+  <div class="soft" id="status"></div>
+
+  <div id="noconfig" class="warn hide">Firebase isn't configured yet. Paste your <code>firebaseConfig</code> into <code>FIREBASE_CONFIG</code> in <code>index.html</code> (see README).</div>
+
+  <div id="signin" class="hide"><div class="card"><button id="btnGoogle">Continue with Google</button></div></div>
+
+  <div id="join" class="hide">
+    <h2>Your house</h2>
+    <div class="card"><form id="fCreate"><input id="houseName" placeholder="House name" required><button>Create house</button></form></div>
+    <div class="card"><form id="fJoin"><input id="joinCode" placeholder="Join code from a housemate" required><button>Join house</button></form></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="row"><div><b id="hName"></b><div class="soft">Join code: <code id="hCode"></code></div></div><button class="ghost" id="btnOut">Sign out</button></div>
+
+    <h2>Balances</h2><div id="balances"></div>
+    <h2>Settle up</h2><div id="settle"></div>
+
+    <h2>Add expense</h2>
+    <div class="card"><form id="fExp">
+      <input id="eDesc" placeholder="What for?" required>
+      <input id="eAmt" type="number" step="0.01" min="0.01" placeholder="Amount" required>
+      <select id="ePayer"></select>
+      <div class="chips" id="eSplit"></div>
+      <button>Add</button>
+    </form></div>
+
+    <h2>History</h2><div id="history"></div>
+  </div>
+</div>
+
+<script type="module">
+/* Paste your Firebase web config here (Project settings → Your apps → Web). */
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+const FB_VERSION = "12.15.0";
+const $ = id => document.getElementById(id);
+const show = (id, on) => $(id).classList.toggle('hide', !on);
+const money = n => (n < 0 ? '-' : '') + '₹' + Math.abs(n).toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+if (!FIREBASE_CONFIG.projectId) { show('noconfig', true); throw new Error('Firebase not configured'); }
+
+const base = `https://www.gstatic.com/firebasejs/${FB_VERSION}`;
+const { initializeApp } = await import(`${base}/firebase-app.js`);
+const fs = await import(`${base}/firebase-firestore.js`);
+const au = await import(`${base}/firebase-auth.js`);
+const app = initializeApp(FIREBASE_CONFIG);
+let db;
+try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+catch { db = fs.getFirestore(app); }
+const auth = au.getAuth(app);
+
+let user = null, houseId = null, house = null, expenses = [], unsubs = [];
+const stop = () => { unsubs.forEach(u => u()); unsubs = []; };
+
+$('btnGoogle').onclick = async () => {
+  const p = new au.GoogleAuthProvider();
+  try { await au.signInWithPopup(auth, p); } catch { await au.signInWithRedirect(auth, p); }
+};
+$('btnOut').onclick = () => au.signOut(auth);
+try { await au.getRedirectResult(auth); } catch (e) { console.error(e); }
+
+au.onAuthStateChanged(auth, async u => {
+  user = u; stop(); house = null;
+  show('signin', !u); show('join', false); show('app', false);
+  $('status').textContent = u ? `Signed in as ${u.displayName || u.email}` : '';
+  if (!u) return;
+  const prof = fs.doc(db, 'users', u.uid);
+  await fs.setDoc(prof, { name: u.displayName || u.email, email: u.email }, { merge: true });
+  const snap = await fs.getDoc(prof);
+  houseId = snap.data().houseId || null;
+  houseId ? openHouse() : show('join', true);
+});
+
+$('fCreate').onsubmit = async e => {
+  e.preventDefault();
+  const ref = fs.doc(fs.collection(db, 'houses'));
+  await fs.setDoc(ref, { name: $('houseName').value.trim(), members: [user.uid], names: { [user.uid]: user.displayName || user.email }, createdAt: Date.now() });
+  await fs.setDoc(fs.doc(db, 'users', user.uid), { houseId: ref.id }, { merge: true });
+  houseId = ref.id; openHouse();
+};
+$('fJoin').onsubmit = async e => {
+  e.preventDefault();
+  const id = $('joinCode').value.trim();
+  try {
+    await fs.updateDoc(fs.doc(db, 'houses', id), { members: fs.arrayUnion(user.uid), [`names.${user.uid}`]: user.displayName || user.email });
+    await fs.setDoc(fs.doc(db, 'users', user.uid), { houseId: id }, { merge: true });
+    houseId = id; openHouse();
+  } catch (err) { alert('Could not join that house. Check the code.'); console.error(err); }
+};
+
+function openHouse() {
+  show('join', false); show('app', true);
+  unsubs.push(fs.onSnapshot(fs.doc(db, 'houses', houseId), s => { house = s.data(); renderHouse(); }));
+  unsubs.push(fs.onSnapshot(fs.collection(db, 'houses', houseId, 'expenses'), s => {
+    expenses = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.date - a.date);
+    render();
+  }));
+}
+
+function renderHouse() {
+  if (!house) return;
+  $('hName').textContent = house.name; $('hCode').textContent = houseId;
+  const opts = house.members.map(m => `<option value="${m}">${esc(house.names[m] || m)}</option>`).join('');
+  const keep = $('ePayer').value; $('ePayer').innerHTML = opts; $('ePayer').value = keep || user.uid;
+  $('eSplit').innerHTML = house.members.map(m => `<label><input type="checkbox" value="${m}" checked>${esc(house.names[m] || m)}</label>`).join('');
+  render();
+}
+
+function balances() {
+  const bal = Object.fromEntries(house.members.map(m => [m, 0]));
+  for (const x of expenses) {
+    const share = x.amount / x.split.length;
+    if (x.settle) { bal[x.payer] += x.amount; bal[x.split[0]] -= x.amount; continue; }
+    bal[x.payer] += x.amount;
+    x.split.forEach(m => bal[m] = (bal[m] ?? 0) - share);
+  }
+  return bal;
+}
+
+function render() {
+  if (!house) return;
+  const bal = balances(), name = m => house.names[m] || m;
+  $('balances').innerHTML = house.members.map(m =>
+    `<div class="card row"><span>${esc(name(m))}${m === user.uid ? ' (you)' : ''}</span><b class="${bal[m] >= 0 ? 'pos' : 'neg'}">${money(bal[m])}</b></div>`).join('');
+
+  // greedy settlement: biggest debtor pays biggest creditor
+  const cr = [], db_ = [];
+  for (const m of house.members) { const v = Math.round(bal[m] * 100) / 100; if (v > 0.005) cr.push([m, v]); else if (v < -0.005) db_.push([m, -v]); }
+  cr.sort((a, b) => b[1] - a[1]); db_.sort((a, b) => b[1] - a[1]);
+  const out = [];
+  while (cr.length && db_.length) {
+    const t = Math.min(cr[0][1], db_[0][1]);
+    out.push({ from: db_[0][0], to: cr[0][0], amt: t });
+    cr[0][1] -= t; db_[0][1] -= t;
+    if (cr[0][1] < 0.005) cr.shift(); if (db_[0][1] < 0.005) db_.shift();
+  }
+  $('settle').innerHTML = out.length ? out.map((o, i) =>
+    `<div class="card row"><span>${esc(name(o.from))} → ${esc(name(o.to))}<br><b>${money(o.amt)}</b></span>${o.from === user.uid ? `<button class="ghost" data-s="${i}">Mark paid</button>` : ''}</div>`).join('')
+    : '<div class="soft">All settled 🎉</div>';
+  $('settle').querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+    const o = out[b.dataset.s];
+    fs.addDoc(fs.collection(db, 'houses', houseId, 'expenses'), { desc: 'Settlement', amount: Math.round(o.amt * 100) / 100, payer: o.from, split: [o.to], settle: true, date: Date.now(), by: user.uid });
+  });
+
+  $('history').innerHTML = expenses.map(x =>
+    `<div class="card"><div class="row"><span>${esc(x.desc)}</span><b>${money(x.amount)}</b></div>
+     <div class="row soft"><span>${esc(name(x.payer))} paid${x.settle ? '' : ' · split ' + x.split.length + ' ways'} · ${new Date(x.date).toLocaleDateString()}</span>
+     <button class="ghost" data-d="${x.id}">✕</button></div></div>`).join('') || '<div class="soft">No expenses yet.</div>';
+  $('history').querySelectorAll('[data-d]').forEach(b => b.onclick = () => confirm('Delete this entry?') && fs.deleteDoc(fs.doc(db, 'houses', houseId, 'expenses', b.dataset.d)));
+}
+
+$('fExp').onsubmit = async e => {
+  e.preventDefault();
+  const split = [...$('eSplit').querySelectorAll('input:checked')].map(i => i.value);
+  if (!split.length) return alert('Pick at least one person to split with.');
+  await fs.addDoc(fs.collection(db, 'houses', houseId, 'expenses'), {
+    desc: $('eDesc').value.trim(), amount: Math.round(parseFloat($('eAmt').value) * 100) / 100,
+    payer: $('ePayer').value, split, date: Date.now(), by: user.uid
+  });
+  $('eDesc').value = ''; $('eAmt').value = '';
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "House Split",
+  "short_name": "HouseSplit",
+  "description": "Split house expenses with your housemates, synced with Firebase.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D1413",
+  "theme_color": "#0D1413",
+  "icons": [
+    { "src": "icon-180.v2.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
