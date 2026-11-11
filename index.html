@@ -260,13 +260,19 @@ $('fExp').onsubmit = async e => {
 };
 
 /* ---------- inbox (iOS Shortcut / Scriptable) ---------- */
+function cleanDate(v) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return v;
+  const t = Date.parse(String(v || '').replace(' at ', ' '));
+  if (isNaN(t)) return today();
+  const d = new Date(t); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+}
 async function importItem(d) {
   const x = d.data(), amount = r2(Number(x.amount) || 0);
   if (amount > 0) {
     const who = (x.people || []).filter(n => FLATMATES.includes(n)), share = r2(amount / (who.length + 1));
     await fs.setDoc(fs.doc(db, 'users', user.uid, 'expenses', 'in_' + d.id), {
-      amount, note: String(x.note || '').slice(0, 80), tag: EMOJI[x.tag] ? x.tag : 'Other',
-      date: x.date || today(), owes: Object.fromEntries(who.map(n => [n, share])), added: false, createdAt: Date.now(), via: 'shortcut'
+      amount, note: String(x.note || '').trim().slice(0, 80), tag: EMOJI[x.tag] ? x.tag : 'Other',
+      date: cleanDate(x.date), owes: Object.fromEntries(who.map(n => [n, share])), added: false, createdAt: Date.now(), via: 'shortcut'
     });
   }
   await fs.deleteDoc(d.ref);
