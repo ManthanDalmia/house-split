@@ -1,6 +1,6 @@
 /* House Split service worker — offline app shell.
    Bump CACHE when you change index.html so clients refresh. */
-const CACHE = 'house-split-v4';
+const CACHE = 'house-split-v5';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-180.v2.png', './icon-512.v2.png'];
 
 self.addEventListener('install', (e) => {

@@ -88,6 +88,16 @@ details summary::after{content:" ▾";color:var(--soft)}
 
     <details><summary>✅ Already in Splitwise</summary><div id="done"></div></details>
 
+    <details><summary>👥 Flatmates</summary>
+      <div class="card"><div class="soft" style="margin-bottom:8px">Names of the people who owe you, separated by commas.</div>
+      <input id="fmInput" placeholder="Ashish, Parth"><button class="big-btn" id="btnFm" type="button">Save names</button></div>
+    </details>
+
+    <details><summary>⚡ Add from iPhone (Shortcut)</summary>
+      <div class="card"><div class="soft" style="margin-bottom:8px">1. Scriptable → new script → paste → name it <b>HouseSplitAdd</b>.<br>2. Shortcuts app → New Shortcut → <b>Run Script</b> (Scriptable) → pick HouseSplitAdd → name it "Add split".<br>3. Shortcut ⓘ → <b>Add to Home Screen</b> (or say "Hey Siri, add split").<br>Entries appear in the app next time it's open.</div>
+      <button id="btnCopyAdd" type="button">Copy add script</button><pre id="aScript"></pre></div>
+    </details>
+
     <details><summary>📱 iOS widget</summary>
       <div class="card"><div class="soft" style="margin-bottom:8px">1. Install <b>Scriptable</b> (App Store). 2. New script → paste this → name it <b>HouseSplit</b>. 3. Add a Scriptable widget to your Home Screen → Script: HouseSplit.</div>
       <button id="btnCopy">Copy widget script</button><pre id="wScript"></pre></div>
@@ -107,7 +117,7 @@ const FIREBASE_CONFIG = {
   appId: "1:14564535943:web:1896c86f004dfe72955222"
 };
 const FB_VERSION = "12.15.0";
-const FLATMATES = ["Ashish", "Parth"];
+let FLATMATES = ["Ashish", "Parth"];
 const TAGS = [["Grocery","🛒"],["Instahelp","🧹"],["Urban Company","🛠️"],["Entertainment","🎬"],["Online product","📦"],["Food & delivery","🍕"],["Utilities","💡"],["Travel","🚕"],["Other","✨"]];
 const EMOJI = Object.fromEntries(TAGS);
 const COLORS = ["#5eead4","#ffa98a","#c4b5fd","#fde68a"];
@@ -132,7 +142,7 @@ try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ t
 catch { db = fs.getFirestore(app); }
 const auth = au.getAuth(app);
 
-let user = null, unsub = null, expenses = [], secret = null, lastSummary = '';
+let user = null, unsub = null, unsubInbox = null, expenses = [], secret = null, lastSummary = '';
 
 $('btnGoogle').onclick = async () => {
   const p = new au.GoogleAuthProvider();
@@ -142,19 +152,25 @@ $('btnOut').onclick = () => au.signOut(auth);
 try { await au.getRedirectResult(auth); } catch (e) { console.error(e); }
 
 au.onAuthStateChanged(auth, async u => {
-  user = u; if (unsub) { unsub(); unsub = null; } expenses = [];
+  user = u; if (unsub) { unsub(); unsub = null; } if (unsubInbox) { unsubInbox(); unsubInbox = null; } expenses = [];
   show('signin', !u); show('app', !!u); show('btnOut', !!u);
   $('status').textContent = u ? `Signed in as ${u.email}` : 'Split flat expenses without the awkward maths.';
   $('hello').textContent = u ? `Hi ${(u.displayName || 'there').split(' ')[0]} 👋` : '🏠 House Split';
   if (!u) return;
-  initForm();
   const prof = fs.doc(db, 'users', u.uid);
   let s = (await fs.getDoc(prof)).data() || {};
   if (!s.widgetSecret) {
     s.widgetSecret = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
     await fs.setDoc(prof, { widgetSecret: s.widgetSecret }, { merge: true });
   }
-  secret = s.widgetSecret; renderWidgetScript();
+  if (Array.isArray(s.flatmates) && s.flatmates.length) FLATMATES = s.flatmates;
+  $('fmInput').value = FLATMATES.join(', ');
+  secret = s.widgetSecret; initForm(); renderWidgetScript();
+  // the widget doc must exist before the inbox rules can resolve its owner
+  const wref = fs.doc(db, 'widgets', secret);
+  if (!(await fs.getDoc(wref)).exists()) await fs.setDoc(wref, { owner: u.uid, owed: {}, pending: 0, updatedAt: Date.now() });
+  unsubInbox = fs.onSnapshot(fs.collection(db, 'widgets', secret, 'items'),
+    snap => snap.docChanges().forEach(ch => ch.type === 'added' && importItem(ch.doc)), console.error);
   unsub = fs.onSnapshot(fs.collection(db, 'users', u.uid, 'expenses'), snap => {
     expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
@@ -207,13 +223,11 @@ $('btnAll').onclick = async () => {
 /* ---------- form ---------- */
 let formReady = false;
 function initForm() {
-  if (formReady) return; formReady = true;
   $('eTag').innerHTML = TAGS.map(([t, e], i) => `<label><input type="radio" name="tag" value="${esc(t)}" ${i ? '' : 'checked'}>${e} ${esc(t)}</label>`).join('');
   $('eWith').innerHTML = FLATMATES.map(n => `<label><input type="checkbox" value="${esc(n)}" checked>${esc(n)}</label>`).join('');
   $('eDate').value = today();
-  ['eAmt', 'eMe', 'eCustom', 'eWith'].forEach(id => $(id).addEventListener('input', updateSplit));
-  $('custom').addEventListener('input', updateSplit);
-  updateSplit();
+  if (!formReady) { formReady = true; ['eAmt', 'eMe', 'eCustom', 'eWith'].forEach(id => $(id).addEventListener('input', updateSplit)); $('custom').addEventListener('input', updateSplit); }
+  updateSplit(); render();
 }
 const selected = () => [...$('eWith').querySelectorAll('input:checked')].map(i => i.value);
 function computeOwes() {
@@ -243,6 +257,26 @@ $('fExp').onsubmit = async e => {
     date: $('eDate').value, owes, added: false, createdAt: Date.now()
   });
   $('eAmt').value = ''; $('eNote').value = ''; $('custom').querySelectorAll('input').forEach(i => i.value = ''); updateSplit(); toast('Expense added 🎉');
+};
+
+/* ---------- inbox (iOS Shortcut / Scriptable) ---------- */
+async function importItem(d) {
+  const x = d.data(), amount = r2(Number(x.amount) || 0);
+  if (amount > 0) {
+    const who = (x.with || []).filter(n => FLATMATES.includes(n)), share = r2(amount / (who.length + 1));
+    await fs.setDoc(fs.doc(db, 'users', user.uid, 'expenses', 'in_' + d.id), {
+      amount, note: String(x.note || '').slice(0, 80), tag: EMOJI[x.tag] ? x.tag : 'Other',
+      date: x.date || today(), owes: Object.fromEntries(who.map(n => [n, share])), added: false, createdAt: Date.now(), via: 'shortcut'
+    });
+  }
+  await fs.deleteDoc(d.ref);
+}
+$('btnFm').onclick = async () => {
+  const names = [...new Set($('fmInput').value.split(',').map(n => n.trim()).filter(Boolean))].slice(0, 6);
+  if (!names.length) return alert('Add at least one name.');
+  FLATMATES = names; $('fmInput').value = names.join(', ');
+  await fs.setDoc(fs.doc(db, 'users', user.uid), { flatmates: names }, { merge: true });
+  lastSummary = ''; initForm(); renderWidgetScript(); publishSummary(); toast('Flatmates saved ✓');
 };
 
 /* ---------- widget ---------- */
@@ -284,7 +318,36 @@ function widgetScript() {
     '})();'
   ].join('\n');
 }
-function renderWidgetScript() { $('wScript').textContent = widgetScript(); }
+function addScript() {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/widgets/${secret}/items?key=${FIREBASE_CONFIG.apiKey}`;
+  return [
+    '// House Split: add expense (Scriptable). Run from a Shortcut, Siri or the Scriptable app.',
+    `const URL_ = ${JSON.stringify(url)};`,
+    `const NAMES = ${JSON.stringify(FLATMATES)};`,
+    `const TAGS = ${JSON.stringify(TAGS.map(t => t[0]))};`,
+    '(async () => {',
+    '  const a = new Alert(); a.title = "Add expense";',
+    '  a.addTextField("Amount you paid (₹)", "").setDecimalPadKeyboard();',
+    '  a.addTextField("Note (optional)", ""); a.addAction("Next"); a.addCancelAction("Cancel");',
+    '  if ((await a.presentAlert()) < 0) return;',
+    '  const amount = parseFloat(a.textFieldValue(0).replace(",", "."));',
+    '  if (!(amount > 0)) { const e = new Alert(); e.message = "Enter a valid amount"; await e.present(); return; }',
+    '  const note = a.textFieldValue(1).trim().slice(0, 80);',
+    '  const t = new Alert(); t.title = "Category"; TAGS.forEach(x => t.addAction(x)); t.addCancelAction("Cancel");',
+    '  const ti = await t.presentSheet(); if (ti < 0) return;',
+    '  const withList = [];',
+    '  for (const n of NAMES) { const q = new Alert(); q.title = "Split with " + n + "?"; q.addAction("Yes"); q.addAction("No"); if ((await q.presentAlert()) === 0) withList.push(n); }',
+    '  const d = new Date(); const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");',
+    '  const r = new Request(URL_); r.method = "POST"; r.headers = { "Content-Type": "application/json" };',
+    '  r.body = JSON.stringify({ fields: { amount: { doubleValue: amount }, note: { stringValue: note }, tag: { stringValue: TAGS[ti] }, date: { stringValue: date },',
+    '    with: { arrayValue: { values: withList.map(n => ({ stringValue: n })) } } } });',
+    '  const res = await r.loadJSON(); const ok = !!res.name; const m = new Alert();',
+    '  m.title = ok ? "Added ✓" : "Failed"; m.message = ok ? "₹" + amount + " will show in the app" : JSON.stringify(res).slice(0, 200); await m.present();',
+    '})();'
+  ].join('\n');
+}
+function renderWidgetScript() { $('wScript').textContent = widgetScript(); $('aScript').textContent = addScript(); }
+$('btnCopyAdd').onclick = async () => { try { await navigator.clipboard.writeText(addScript()); $('btnCopyAdd').textContent = 'Copied ✓'; } catch { alert('Long-press the text to copy.'); } };
 $('btnCopy').onclick = async () => { try { await navigator.clipboard.writeText(widgetScript()); $('btnCopy').textContent = 'Copied ✓'; } catch { alert('Long-press the text below to copy.'); } };
 </script>
 </body>
