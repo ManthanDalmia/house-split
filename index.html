@@ -52,6 +52,8 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:.7rem;background:var(--b
 details summary{cursor:pointer;font-weight:700;margin:28px 0 10px;list-style:none}
 details summary::-webkit-details-marker{display:none}
 details summary::after{content:" ▾";color:var(--soft)}
+#editor{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:8;overflow:auto;padding:max(env(safe-area-inset-top),16px) 16px 40px}
+#editor .card{max-width:520px;margin:0 auto}
 #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,80px);background:var(--accent);color:#04201b;font-weight:700;padding:11px 18px;border-radius:99px;transition:transform .25s;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:9}
 #toast.on{transform:translate(-50%,0)}
 </style>
@@ -90,7 +92,11 @@ details summary::after{content:" ▾";color:var(--soft)}
 
     <details><summary>👥 Flatmates</summary>
       <div class="card"><div class="soft" style="margin-bottom:8px">Names of the people who owe you, separated by commas.</div>
-      <input id="fmInput" placeholder="Ashish, Parth"><button class="big-btn" id="btnFm" type="button">Save names</button></div>
+      <input id="fmInput" placeholder="Ashish, Parth"><div class="soft" style="margin:10px 0 8px">Your own name (shown as a choice in the shortcut so you can leave yourself out of a split).</div><input id="meInput" placeholder="Manthan"><button class="big-btn" id="btnFm" type="button">Save names</button></div>
+    </details>
+
+    <details><summary>🧹 Data</summary>
+      <div class="card"><div class="soft" style="margin-bottom:8px">Permanently deletes every expense in your account (pending and already-added).</div><button class="big-btn" id="btnWipe" type="button" style="background:#f87171">Delete all expenses</button></div>
     </details>
 
     <details><summary>⚡ Add from iPhone (Shortcut)</summary>
@@ -104,6 +110,19 @@ details summary::after{content:" ▾";color:var(--soft)}
     </details>
   </div>
 </div>
+<div id="editor" class="hide"><div class="card"><form id="fEdit">
+  <b>Edit expense</b>
+  <input id="eeAmt" type="number" inputmode="decimal" step="0.01" min="0.01" required style="font-size:1.2rem;font-weight:700">
+  <input id="eeNote" placeholder="Note" maxlength="80">
+  <select id="eeTag"></select>
+  <input id="eeDate" type="date" required>
+  <div class="lbl">Who owes you (amount each)</div>
+  <div id="eeRows" style="display:grid;gap:6px"></div>
+  <label class="tick"><input type="checkbox" id="eeMe" checked> I'm in the split (for “Split equally”)</label>
+  <button type="button" class="ghost" id="eeEq" style="width:100%">Split equally among ticked</button>
+  <div class="preview" id="eeMine"></div>
+  <div class="row"><button type="button" class="ghost" id="eeCancel">Cancel</button><button class="add" style="padding:12px 20px">Save changes</button></div>
+</form></div></div>
 <div id="toast"></div>
 
 <script type="module">
@@ -118,6 +137,7 @@ const FIREBASE_CONFIG = {
 };
 const FB_VERSION = "12.15.0";
 let FLATMATES = ["Ashish", "Parth"];
+let ME = "Me"; // your own name, shown as a person in the iPhone shortcut
 const TAGS = [["Grocery","🛒"],["Instahelp","🧹"],["Urban Company","🛠️"],["Entertainment","🎬"],["Online product","📦"],["Food & delivery","🍕"],["Utilities","💡"],["Travel","🚕"],["Other","✨"]];
 const EMOJI = Object.fromEntries(TAGS);
 const COLORS = ["#5eead4","#ffa98a","#c4b5fd","#fde68a"];
@@ -164,7 +184,8 @@ au.onAuthStateChanged(auth, async u => {
     await fs.setDoc(prof, { widgetSecret: s.widgetSecret }, { merge: true });
   }
   if (Array.isArray(s.flatmates) && s.flatmates.length) FLATMATES = s.flatmates;
-  $('fmInput').value = FLATMATES.join(', ');
+  ME = s.meName || (u.displayName || 'Me').split(' ')[0];
+  $('fmInput').value = FLATMATES.join(', '); $('meInput').value = ME;
   secret = s.widgetSecret; initForm(); renderWidgetScript();
   // the widget doc must exist before the inbox rules can resolve its owner
   const wref = fs.doc(db, 'widgets', secret);
@@ -196,12 +217,13 @@ function render() {
 }
 function item(x, isDone) {
   const owes = FLATMATES.filter(n => x.owes && x.owes[n] > 0).map(n => `${esc(n)} ${money(x.owes[n])}`).join(' · ');
+  const sum = Object.values(x.owes || {}).reduce((a, b) => a + b, 0), mine = r2(x.amount - sum);
   const d = x.date ? new Date(x.date + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
   return `<div class="card"><div class="row"><div class="item-ico">${EMOJI[x.tag] || '✨'}</div>
     <div class="item-main"><b>${esc(x.note || x.tag || 'Expense')}</b><div class="soft">${esc(x.tag || 'Other')} · ${d}</div></div>
     <div style="text-align:right"><div class="amt">${money(x.amount)}</div><div class="soft">you paid</div></div></div>
-    <div class="soft" style="margin:8px 0 10px">${owes || 'Personal expense'}</div>
-    <div class="row"><button class="ghost" data-del="${x.id}">🗑 Delete</button>
+    <div class="soft" style="margin:8px 0 10px">${owes || 'Personal expense'}${sum > 0 ? ` · ${mine < -0.01 ? '⚠️ shares exceed amount' : 'your share ' + money(mine)}` : ''}</div>
+    <div class="row"><span><button class="ghost" data-edit="${x.id}">✏️ Edit</button> <button class="ghost" data-del="${x.id}">🗑</button></span>
     ${isDone ? `<button class="ghost" data-undo="${x.id}">↩ Undo</button>` : `<button class="add" data-add="${x.id}">✓ Added to Splitwise</button>`}</div></div>`;
 }
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1800); };
@@ -209,6 +231,7 @@ document.addEventListener('click', async e => {
   const t = e.target; if (!user || !t.dataset) return;
   const ref = id => fs.doc(db, 'users', user.uid, 'expenses', id);
   if (t.dataset.add) { await fs.updateDoc(ref(t.dataset.add), { added: true, addedAt: Date.now() }); toast('Moved to Splitwise ✓'); }
+  else if (t.dataset.edit) openEdit(t.dataset.edit);
   else if (t.dataset.undo) await fs.updateDoc(ref(t.dataset.undo), { added: false, addedAt: null });
   else if (t.dataset.del && confirm('Delete this expense?')) await fs.deleteDoc(ref(t.dataset.del));
 });
@@ -259,6 +282,53 @@ $('fExp').onsubmit = async e => {
   $('eAmt').value = ''; $('eNote').value = ''; $('custom').querySelectorAll('input').forEach(i => i.value = ''); updateSplit(); toast('Expense added 🎉');
 };
 
+/* ---------- edit / wipe ---------- */
+let editId = null;
+function openEdit(id) {
+  const x = expenses.find(e => e.id === id); if (!x) return; editId = id;
+  $('eeAmt').value = x.amount; $('eeNote').value = x.note || ''; $('eeDate').value = x.date || today();
+  $('eeTag').innerHTML = TAGS.map(([t, e]) => `<option value="${esc(t)}" ${t === x.tag ? 'selected' : ''}>${e} ${esc(t)}</option>`).join('');
+  $('eeRows').innerHTML = FLATMATES.map(n => { const v = (x.owes && x.owes[n]) || '';
+    return `<div class="cust"><span class="tick"><input type="checkbox" data-ec="${esc(n)}" ${v ? 'checked' : ''}>${esc(n)}</span><input data-en="${esc(n)}" type="number" inputmode="decimal" step="0.01" min="0" value="${v}"></div>`; }).join('');
+  $('eeMe').checked = x.amount - Object.values(x.owes || {}).reduce((a, b) => a + b, 0) > 0.01;
+  updateEdit(); show('editor', true);
+}
+function editOwes() {
+  const o = {};
+  $('eeRows').querySelectorAll('[data-en]').forEach(i => { const v = r2(parseFloat(i.value) || 0); if (v > 0) o[i.dataset.en] = v; });
+  return o;
+}
+function updateEdit() {
+  const amt = parseFloat($('eeAmt').value) || 0, mine = r2(amt - Object.values(editOwes()).reduce((a, b) => a + b, 0));
+  $('eeMine').textContent = mine < -0.01 ? '⚠️ Shares add up to more than the amount' : `Your share: ${money(mine)}`;
+}
+$('editor').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.en !== undefined) $('eeRows').querySelector(`[data-ec="${t.dataset.en}"]`).checked = (parseFloat(t.value) || 0) > 0;
+  if (t.dataset.ec !== undefined && !t.checked) $('eeRows').querySelector(`[data-en="${t.dataset.ec}"]`).value = '';
+  updateEdit();
+});
+$('eeEq').onclick = () => {
+  const amt = parseFloat($('eeAmt').value) || 0, on = [...$('eeRows').querySelectorAll('[data-ec]:checked')].map(c => c.dataset.ec);
+  const k = on.length + ($('eeMe').checked ? 1 : 0); if (!k) return;
+  on.forEach(n => $('eeRows').querySelector(`[data-en="${n}"]`).value = r2(amt / k)); updateEdit();
+};
+$('eeCancel').onclick = () => show('editor', false);
+$('fEdit').onsubmit = async e => {
+  e.preventDefault();
+  const amount = r2(parseFloat($('eeAmt').value)), owes = editOwes();
+  if (Object.values(owes).reduce((a, b) => a + b, 0) > amount + 0.01) return alert('Shares add up to more than the amount you paid.');
+  await fs.updateDoc(fs.doc(db, 'users', user.uid, 'expenses', editId),
+    { amount, note: $('eeNote').value.trim(), tag: $('eeTag').value, date: $('eeDate').value, owes, editedAt: Date.now() });
+  show('editor', false); toast('Saved ✓');
+};
+$('btnWipe').onclick = async () => {
+  if (!confirm('Delete ALL expenses? This cannot be undone.') || !confirm('Really delete everything?')) return;
+  const snap = await fs.getDocs(col()); let b = fs.writeBatch(db), c = 0;
+  for (const d of snap.docs) { b.delete(d.ref); if (++c % 400 === 0) { await b.commit(); b = fs.writeBatch(db); } }
+  await b.commit(); toast('All expenses deleted');
+};
+
 /* ---------- inbox (iOS Shortcut / Scriptable) ---------- */
 function cleanDate(v) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return v;
@@ -266,13 +336,28 @@ function cleanDate(v) {
   if (isNaN(t)) return today();
   const d = new Date(t); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 }
+const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+function parseCustom(str) { // "Ashish 200, Parth 150, Manthan 100"
+  const out = {}; let any = false;
+  String(str || '').split(',').forEach(part => {
+    const t = part.trim(), i = t.lastIndexOf(' '); if (i < 0) return;
+    const name = FLATMATES.find(n => same(n, t.slice(0, i))), v = r2(parseFloat(t.slice(i + 1)));
+    if (name && v >= 0) { out[name] = v; any = true; }
+  });
+  return any ? out : null;
+}
 async function importItem(d) {
   const x = d.data(), amount = r2(Number(x.amount) || 0);
   if (amount > 0) {
-    const who = (x.people || []).filter(n => FLATMATES.includes(n)), share = r2(amount / (who.length + 1));
+    const ppl = (x.people || []).map(String);
+    const who = FLATMATES.filter(n => ppl.some(p => same(p, n)));
+    const meIn = ppl.some(p => same(p, ME)), custom = parseCustom(x.custom);
+    let owes = {};
+    if (custom) FLATMATES.forEach(n => { if (custom[n] > 0) owes[n] = custom[n]; });
+    else { const k = who.length + (meIn ? 1 : 0), share = k ? r2(amount / k) : 0; who.forEach(n => owes[n] = share); }
     await fs.setDoc(fs.doc(db, 'users', user.uid, 'expenses', 'in_' + d.id), {
       amount, note: String(x.note || '').trim().slice(0, 80), tag: EMOJI[x.tag] ? x.tag : 'Other',
-      date: cleanDate(x.date), owes: Object.fromEntries(who.map(n => [n, share])), added: false, createdAt: Date.now(), via: 'shortcut'
+      date: cleanDate(x.date), owes, added: false, createdAt: Date.now(), via: 'shortcut'
     });
   }
   await fs.deleteDoc(d.ref);
@@ -281,7 +366,8 @@ $('btnFm').onclick = async () => {
   const names = [...new Set($('fmInput').value.split(',').map(n => n.trim()).filter(Boolean))].slice(0, 6);
   if (!names.length) return alert('Add at least one name.');
   FLATMATES = names; $('fmInput').value = names.join(', ');
-  await fs.setDoc(fs.doc(db, 'users', user.uid), { flatmates: names }, { merge: true });
+  ME = $('meInput').value.trim() || ME; $('meInput').value = ME;
+  await fs.setDoc(fs.doc(db, 'users', user.uid), { flatmates: names, meName: ME }, { merge: true });
   lastSummary = ''; initForm(); renderWidgetScript(); publishSummary(); toast('Flatmates saved ✓');
 };
 
@@ -330,7 +416,7 @@ function addScript() {
   return [
     '// House Split: add expense (Scriptable). Run from a Shortcut, Siri or the Scriptable app.',
     `const URL_ = ${JSON.stringify(url)};`,
-    `const NAMES = ${JSON.stringify(FLATMATES)};`,
+    `const NAMES = ${JSON.stringify([ME, ...FLATMATES])};`,
     `const TAGS = ${JSON.stringify(TAGS.map(t => t[0]))};`,
     '(async () => {',
     '  const a = new Alert(); a.title = "Add expense";',
@@ -347,7 +433,7 @@ function addScript() {
     '  const d = new Date(); const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");',
     '  const r = new Request(URL_); r.method = "POST"; r.headers = { "Content-Type": "application/json" };',
     '  r.body = JSON.stringify({ fields: { amount: { doubleValue: amount }, note: { stringValue: note }, tag: { stringValue: TAGS[ti] }, date: { stringValue: date },',
-    '    people: { arrayValue: { values: withList.map(n => ({ stringValue: n })) } } } });',
+    '    people: { arrayValue: { values: withList.map(n => ({ stringValue: n })) } }, custom: { stringValue: "" } } });',
     '  const res = await r.loadJSON(); const ok = !!res.name; const m = new Alert();',
     '  m.title = ok ? "Added ✓" : "Failed"; m.message = ok ? "₹" + amount + " will show in the app" : JSON.stringify(res).slice(0, 200); await m.present();',
     '})();'

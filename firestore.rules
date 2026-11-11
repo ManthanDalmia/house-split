@@ -19,12 +19,14 @@ service cloud.firestore {
       // entry; only the owner can read or clear them (the app imports them as expenses).
       match /items/{itemId} {
         allow create: if exists(/databases/$(db)/documents/widgets/$(id))
-                      && request.resource.data.keys().hasOnly(['amount', 'note', 'tag', 'date', 'people'])
+                      && request.resource.data.keys().hasOnly(['amount', 'note', 'tag', 'date', 'people', 'custom'])
                       && request.resource.data.amount is number
                       && request.resource.data.amount > 0 && request.resource.data.amount < 1000000
                       && request.resource.data.note is string && request.resource.data.note.size() <= 80
                       && request.resource.data.tag is string && request.resource.data.date is string
-                      && request.resource.data.people is list && request.resource.data.people.size() <= 6;
+                      && request.resource.data.people is list && request.resource.data.people.size() <= 7
+                      && (!('custom' in request.resource.data)
+                          || (request.resource.data.custom is string && request.resource.data.custom.size() <= 200));
         allow read, delete: if request.auth != null
                             && get(/databases/$(db)/documents/widgets/$(id)).data.owner == request.auth.uid;
       }

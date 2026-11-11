@@ -3,6 +3,7 @@
 # Setup: export SPLIT_URL='<the URL_ value from the app's "Add from iPhone" script>'  (put it in ~/.zshrc)
 # Usage: ./add-split.sh <amount> "<note>" <Category> [flatmate ...]
 #   ./add-split.sh 450 "Blinkit milk" Grocery Ashish Parth
+# Include your own name (e.g. Manthan) in the list if you're part of the split; leave it out to exclude yourself.
 # Categories: Grocery, Instahelp, "Urban Company", Entertainment, "Online product", "Food & delivery", Utilities, Travel, Other
 [ -z "$SPLIT_URL" ] && { echo "Set SPLIT_URL first (see header)"; exit 1; }
 [ $# -lt 3 ] && { sed -n '5,7p' "$0"; exit 1; }
@@ -14,6 +15,7 @@ print(json.dumps({"fields": {
     "note": {"stringValue": note[:80]},
     "tag": {"stringValue": tag},
     "date": {"stringValue": datetime.date.today().isoformat()},
+    "custom": {"stringValue": ""},
     "people": {"arrayValue": {"values": [{"stringValue": p} for p in people]}}}}))
 PY
 ) || exit 1
