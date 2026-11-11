@@ -263,7 +263,7 @@ $('fExp').onsubmit = async e => {
 async function importItem(d) {
   const x = d.data(), amount = r2(Number(x.amount) || 0);
   if (amount > 0) {
-    const who = (x.with || []).filter(n => FLATMATES.includes(n)), share = r2(amount / (who.length + 1));
+    const who = (x.people || []).filter(n => FLATMATES.includes(n)), share = r2(amount / (who.length + 1));
     await fs.setDoc(fs.doc(db, 'users', user.uid, 'expenses', 'in_' + d.id), {
       amount, note: String(x.note || '').slice(0, 80), tag: EMOJI[x.tag] ? x.tag : 'Other',
       date: x.date || today(), owes: Object.fromEntries(who.map(n => [n, share])), added: false, createdAt: Date.now(), via: 'shortcut'
@@ -340,7 +340,7 @@ function addScript() {
     '  const d = new Date(); const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");',
     '  const r = new Request(URL_); r.method = "POST"; r.headers = { "Content-Type": "application/json" };',
     '  r.body = JSON.stringify({ fields: { amount: { doubleValue: amount }, note: { stringValue: note }, tag: { stringValue: TAGS[ti] }, date: { stringValue: date },',
-    '    with: { arrayValue: { values: withList.map(n => ({ stringValue: n })) } } } });',
+    '    people: { arrayValue: { values: withList.map(n => ({ stringValue: n })) } } } });',
     '  const res = await r.loadJSON(); const ok = !!res.name; const m = new Alert();',
     '  m.title = ok ? "Added ✓" : "Failed"; m.message = ok ? "₹" + amount + " will show in the app" : JSON.stringify(res).slice(0, 200); await m.present();',
     '})();'
