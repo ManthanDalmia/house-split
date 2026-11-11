@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0D1413">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.v2.png">
+<title>House Split</title>
+<style>
+:root{--bg:#0D1413;--surface:#16201e;--line:#26332f;--ink:#e8f0ee;--soft:#93a6a1;--accent:#5eead4;--warm:#ff9c7c;--good:#4ade80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:max(env(safe-area-inset-top),12px) 16px 60px}
+.wrap{max-width:520px;margin:0 auto}
+h1{font-size:1.35rem;margin:14px 0 2px}
+h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin:26px 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+input,select,button,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;width:100%}
+button{background:var(--accent);color:#04201b;border:0;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--soft);border:1px solid var(--line);width:auto;padding:6px 10px;font-weight:500;font-size:.85rem}
+button.add{background:var(--warm);width:auto;padding:7px 12px;font-size:.85rem;white-space:nowrap}
+form{display:grid;gap:8px}
+.soft{color:var(--soft);font-size:.85rem}
+.big{font-size:1.5rem;font-weight:700;color:var(--warm)}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.totals .card{margin:0;text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:.9rem;cursor:pointer}
+.chips input{width:auto;margin:0}
+.chips label:has(input:checked){border-color:var(--accent);color:var(--accent)}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:1px 8px;font-size:.75rem;color:var(--accent)}
+.hide{display:none!important}
+.warn{background:#3a2a12;border:1px solid #6b4a14;border-radius:10px;padding:12px;font-size:.9rem}
+.cust{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center}
+pre{white-space:pre-wrap;word-break:break-all;font-size:.7rem;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;max-height:140px;overflow:auto}
+details summary{cursor:pointer;color:var(--soft);font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;margin:26px 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row"><h1>🏠 House Split</h1><button class="ghost hide" id="btnOut">Sign out</button></div>
+  <div class="soft" id="status"></div>
+
+  <div id="noconfig" class="warn hide" style="margin-top:12px">Firebase isn't configured yet. Paste your <code>firebaseConfig</code> into <code>FIREBASE_CONFIG</code> in <code>index.html</code> (see README).</div>
+  <div id="signin" class="hide" style="margin-top:16px"><div class="card"><button id="btnGoogle">Continue with Google</button></div></div>
+
+  <div id="app" class="hide">
+    <h2>Pending for Splitwise</h2>
+    <div class="totals" id="totals"></div>
+    <div class="row" style="margin-top:10px"><span class="soft" id="pendCount"></span><button class="ghost" id="btnAll">✓ Mark all added</button></div>
+    <div id="pending" style="margin-top:8px"></div>
+
+    <h2>Log an expense</h2>
+    <div class="card"><form id="fExp">
+      <input id="eAmt" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="Total amount you paid (₹)" required>
+      <input id="eNote" placeholder="Short note (e.g. Blinkit milk + eggs)" maxlength="80">
+      <div class="chips" id="eTag"></div>
+      <input id="eDate" type="date" required>
+      <div class="soft">Split with</div>
+      <div class="chips" id="eWith"></div>
+      <label class="soft" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="eMe" checked style="width:auto"> I'm part of the split too (equal shares)</label>
+      <label class="soft" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="eCustom" style="width:auto"> Custom amounts</label>
+      <div id="custom" class="hide" style="display:grid;gap:6px"></div>
+      <div class="soft" id="preview"></div>
+      <button>Add expense</button>
+    </form></div>
+
+    <details><summary>Already in Splitwise</summary><div id="done"></div></details>
+
+    <details><summary>iOS widget</summary>
+      <div class="card"><div class="soft" style="margin-bottom:8px">1. Install <b>Scriptable</b> (App Store). 2. New script → paste this → name it <b>HouseSplit</b>. 3. Add a Scriptable widget to your Home Screen → Script: HouseSplit.</div>
+      <button id="btnCopy">Copy widget script</button><pre id="wScript"></pre></div>
+    </details>
+  </div>
+</div>
+
+<script type="module">
+/* Paste your Firebase web config here (Project settings → Your apps → Web). */
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+const FB_VERSION = "12.15.0";
+const FLATMATES = ["Ashish", "Parth"];
+const TAGS = ["Grocery", "Entertainment", "Online product", "Food & delivery", "Utilities", "Travel", "Other"];
+
+const $ = id => document.getElementById(id);
+const show = (id, on) => $(id).classList.toggle('hide', !on);
+const r2 = n => Math.round(n * 100) / 100;
+const money = n => '₹' + r2(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if (!FIREBASE_CONFIG.projectId) { show('noconfig', true); throw new Error('Firebase not configured'); }
+
+const base = `https://www.gstatic.com/firebasejs/${FB_VERSION}`;
+const { initializeApp } = await import(`${base}/firebase-app.js`);
+const fs = await import(`${base}/firebase-firestore.js`);
+const au = await import(`${base}/firebase-auth.js`);
+const app = initializeApp(FIREBASE_CONFIG);
+let db;
+try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+catch { db = fs.getFirestore(app); }
+const auth = au.getAuth(app);
+
+let user = null, unsub = null, expenses = [], secret = null, lastSummary = '';
+
+$('btnGoogle').onclick = async () => {
+  const p = new au.GoogleAuthProvider();
+  try { await au.signInWithPopup(auth, p); } catch { await au.signInWithRedirect(auth, p); }
+};
+$('btnOut').onclick = () => au.signOut(auth);
+try { await au.getRedirectResult(auth); } catch (e) { console.error(e); }
+
+au.onAuthStateChanged(auth, async u => {
+  user = u; if (unsub) { unsub(); unsub = null; } expenses = [];
+  show('signin', !u); show('app', !!u); show('btnOut', !!u);
+  $('status').textContent = u ? `Signed in as ${u.email}` : '';
+  if (!u) return;
+  initForm();
+  const prof = fs.doc(db, 'users', u.uid);
+  let s = (await fs.getDoc(prof)).data() || {};
+  if (!s.widgetSecret) {
+    s.widgetSecret = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+    await fs.setDoc(prof, { widgetSecret: s.widgetSecret }, { merge: true });
+  }
+  secret = s.widgetSecret; renderWidgetScript();
+  unsub = fs.onSnapshot(fs.collection(db, 'users', u.uid, 'expenses'), snap => {
+    expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+    render(); publishSummary();
+  }, console.error);
+});
+
+const col = () => fs.collection(db, 'users', user.uid, 'expenses');
+const owedTotals = list => {
+  const t = Object.fromEntries(FLATMATES.map(n => [n, 0]));
+  list.forEach(x => FLATMATES.forEach(n => t[n] += (x.owes && x.owes[n]) || 0));
+  FLATMATES.forEach(n => t[n] = r2(t[n]));
+  return t;
+};
+
+function render() {
+  const pend = expenses.filter(x => !x.added), done = expenses.filter(x => x.added), t = owedTotals(pend);
+  $('totals').innerHTML = FLATMATES.map(n => `<div class="card"><div class="soft">${esc(n)} owes you</div><div class="big">${money(t[n])}</div></div>`).join('');
+  $('pendCount').textContent = pend.length ? `${pend.length} expense${pend.length > 1 ? 's' : ''} not in Splitwise yet` : 'Nothing pending 🎉';
+  show('btnAll', pend.length > 0);
+  $('pending').innerHTML = pend.map(x => item(x, false)).join('');
+  $('done').innerHTML = done.length ? done.map(x => item(x, true)).join('') : '<div class="soft">Nothing yet.</div>';
+}
+function item(x, isDone) {
+  const owes = FLATMATES.filter(n => x.owes && x.owes[n] > 0).map(n => `${esc(n)} ${money(x.owes[n])}`).join(' · ');
+  return `<div class="card"><div class="row"><div><b>${esc(x.note || 'Expense')}</b> <span class="tag">${esc(x.tag || 'Other')}</span>
+    <div class="soft">${esc(x.date || '')} · paid ${money(x.amount)}</div><div class="soft">${owes || 'no one owes'}</div></div>
+    ${isDone ? `<button class="ghost" data-undo="${x.id}">Undo</button>` : `<button class="add" data-add="${x.id}">✓ Added</button>`}</div>
+    <div style="text-align:right"><button class="ghost" data-del="${x.id}" style="border:0;padding:2px 4px">delete</button></div></div>`;
+}
+document.addEventListener('click', async e => {
+  const t = e.target; if (!user || !t.dataset) return;
+  const ref = id => fs.doc(db, 'users', user.uid, 'expenses', id);
+  if (t.dataset.add) await fs.updateDoc(ref(t.dataset.add), { added: true, addedAt: Date.now() });
+  else if (t.dataset.undo) await fs.updateDoc(ref(t.dataset.undo), { added: false, addedAt: null });
+  else if (t.dataset.del && confirm('Delete this expense?')) await fs.deleteDoc(ref(t.dataset.del));
+});
+$('btnAll').onclick = async () => {
+  const pend = expenses.filter(x => !x.added);
+  if (!pend.length || !confirm(`Mark ${pend.length} expense(s) as added to Splitwise?`)) return;
+  const b = fs.writeBatch(db);
+  pend.forEach(x => b.update(fs.doc(db, 'users', user.uid, 'expenses', x.id), { added: true, addedAt: Date.now() }));
+  await b.commit();
+};
+
+/* ---------- form ---------- */
+let formReady = false;
+function initForm() {
+  if (formReady) return; formReady = true;
+  $('eTag').innerHTML = TAGS.map((t, i) => `<label><input type="radio" name="tag" value="${esc(t)}" ${i ? '' : 'checked'}>${esc(t)}</label>`).join('');
+  $('eWith').innerHTML = FLATMATES.map(n => `<label><input type="checkbox" value="${esc(n)}" checked>${esc(n)}</label>`).join('');
+  $('eDate').value = today();
+  ['eAmt', 'eMe', 'eCustom', 'eWith'].forEach(id => $(id).addEventListener('input', updateSplit));
+  $('custom').addEventListener('input', updateSplit);
+  updateSplit();
+}
+const selected = () => [...$('eWith').querySelectorAll('input:checked')].map(i => i.value);
+function computeOwes() {
+  const amt = parseFloat($('eAmt').value) || 0, sel = selected(), owes = {};
+  if ($('eCustom').checked) { sel.forEach(n => owes[n] = r2(parseFloat(($('custom').querySelector(`[data-n="${n}"]`) || {}).value) || 0)); return owes; }
+  const n = sel.length + ($('eMe').checked ? 1 : 0);
+  sel.forEach(p => owes[p] = n ? r2(amt / n) : 0);
+  return owes;
+}
+function updateSplit() {
+  const sel = selected(), custom = $('eCustom').checked;
+  $('custom').classList.toggle('hide', !custom);
+  if (custom) {
+    const keep = Object.fromEntries([...$('custom').querySelectorAll('input')].map(i => [i.dataset.n, i.value]));
+    $('custom').innerHTML = sel.map(n => `<div class="cust"><span>${esc(n)} owes</span><input data-n="${esc(n)}" type="number" inputmode="decimal" step="0.01" min="0" value="${keep[n] ?? ''}"></div>`).join('');
+  }
+  const o = computeOwes();
+  $('preview').textContent = sel.length ? sel.map(n => `${n} owes ${money(o[n])}`).join(' · ') : 'Nobody selected — this will be a personal expense.';
+}
+$('fExp').onsubmit = async e => {
+  e.preventDefault();
+  const owes = computeOwes(), amount = r2(parseFloat($('eAmt').value));
+  const sum = Object.values(owes).reduce((a, b) => a + b, 0);
+  if (sum > amount + 0.01) return alert('Shares add up to more than the amount you paid.');
+  await fs.addDoc(col(), {
+    amount, note: $('eNote').value.trim(), tag: ($('eTag').querySelector('input:checked') || {}).value || 'Other',
+    date: $('eDate').value, owes, added: false, createdAt: Date.now()
+  });
+  $('eAmt').value = ''; $('eNote').value = ''; $('custom').querySelectorAll('input').forEach(i => i.value = ''); updateSplit();
+};
+
+/* ---------- widget ---------- */
+async function publishSummary() {
+  if (!secret) return;
+  const pend = expenses.filter(x => !x.added), owed = owedTotals(pend);
+  const key = JSON.stringify([owed, pend.length]);
+  if (key === lastSummary) return; lastSummary = key;
+  try { await fs.setDoc(fs.doc(db, 'widgets', secret), { owner: user.uid, owed, pending: pend.length, updatedAt: Date.now() }); }
+  catch (e) { console.error('widget summary failed', e); }
+}
+function widgetScript() {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/widgets/${secret}?key=${FIREBASE_CONFIG.apiKey}`;
+  return [
+    '// House Split widget (Scriptable)',
+    `const URL_ = ${JSON.stringify(url)};`,
+    `const APP = ${JSON.stringify(location.origin + location.pathname)};`,
+    `const NAMES = ${JSON.stringify(FLATMATES)};`,
+    'const num = v => v ? Number(v.doubleValue ?? v.integerValue ?? 0) : 0;',
+    '(async () => {',
+    '  const w = new ListWidget(); w.url = APP; w.setPadding(14, 14, 14, 14);',
+    '  w.backgroundColor = new Color("#0D1413");',
+    '  const t = w.addText("🏠 To add in Splitwise"); t.font = Font.semiboldSystemFont(12); t.textColor = new Color("#74E8DC");',
+    '  w.addSpacer(6);',
+    '  try {',
+    '    const f = (await new Request(URL_).loadJSON()).fields;',
+    '    const owed = f.owed.mapValue.fields || {};',
+    '    for (const n of NAMES) {',
+    '      const r = w.addStack(); r.centerAlignContent();',
+    '      const a = r.addText(n); a.font = Font.systemFont(14); a.textColor = Color.white(); r.addSpacer();',
+    '      const b = r.addText("₹" + num(owed[n]).toFixed(0)); b.font = Font.boldSystemFont(16); b.textColor = new Color("#FF9C7C");',
+    '    }',
+    '    w.addSpacer();',
+    '    const p = w.addText(num(f.pending) + " pending"); p.font = Font.systemFont(11); p.textColor = new Color("#9CB0AC");',
+    '  } catch (e) { const x = w.addText("Open app once to sync"); x.font = Font.systemFont(12); x.textColor = Color.white(); }',
+    '  w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);',
+    '  if (config.runsInWidget) Script.setWidget(w); else await w.presentSmall();',
+    '  Script.complete();',
+    '})();'
+  ].join('\n');
+}
+function renderWidgetScript() { $('wScript').textContent = widgetScript(); }
+$('btnCopy').onclick = async () => { try { await navigator.clipboard.writeText(widgetScript()); $('btnCopy').textContent = 'Copied ✓'; } catch { alert('Long-press the text below to copy.'); } };
+</script>
+</body>
+</html>
