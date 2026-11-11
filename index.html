@@ -9,72 +9,92 @@
 <link rel="apple-touch-icon" href="icon-180.v2.png">
 <title>House Split</title>
 <style>
-:root{--bg:#0D1413;--surface:#16201e;--line:#26332f;--ink:#e8f0ee;--soft:#93a6a1;--accent:#5eead4;--warm:#ff9c7c;--good:#4ade80}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:max(env(safe-area-inset-top),12px) 16px 60px}
+:root{--bg:#0F1716;--surface:#18241f;--surface2:#1f2e29;--line:#2a3b35;--ink:#f0f6f4;--soft:#9bb0aa;--accent:#5eead4;--warm:#ffa98a;--good:#4ade80;--r:18px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:radial-gradient(900px 400px at 50% -100px,#1b3a33 0,var(--bg) 70%) no-repeat,var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,"SF Pro Rounded",sans-serif;padding:max(env(safe-area-inset-top),14px) 16px 80px;min-height:100vh}
 .wrap{max-width:520px;margin:0 auto}
-h1{font-size:1.35rem;margin:14px 0 2px}
-h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin:26px 0 8px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+h1{font-size:1.5rem;margin:12px 0 2px;letter-spacing:-.01em}
+h2{font-size:1rem;font-weight:700;margin:28px 0 10px;display:flex;align-items:center;gap:8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
-input,select,button,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;width:100%}
-button{background:var(--accent);color:#04201b;border:0;font-weight:600;cursor:pointer}
-button.ghost{background:transparent;color:var(--soft);border:1px solid var(--line);width:auto;padding:6px 10px;font-weight:500;font-size:.85rem}
-button.add{background:var(--warm);width:auto;padding:7px 12px;font-size:.85rem;white-space:nowrap}
-form{display:grid;gap:8px}
+input,select,button,textarea{font:inherit;color:var(--ink);background:var(--surface2);border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;width:100%;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--accent)}
+button{background:var(--accent);color:#04201b;border:0;font-weight:700;cursor:pointer;transition:transform .1s}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--soft);border:1.5px solid var(--line);width:auto;padding:7px 12px;font-weight:600;font-size:.85rem;border-radius:99px}
+button.add{background:var(--warm);width:auto;padding:9px 14px;font-size:.88rem;white-space:nowrap;border-radius:99px}
+button.big-btn{padding:15px;font-size:1.05rem;border-radius:16px;margin-top:4px}
+form{display:grid;gap:12px}
+.lbl{font-size:.8rem;font-weight:600;color:var(--soft);margin-bottom:-4px}
 .soft{color:var(--soft);font-size:.85rem}
-.big{font-size:1.5rem;font-weight:700;color:var(--warm)}
-.totals{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.totals .card{margin:0;text-align:center}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:.9rem;cursor:pointer}
-.chips input{width:auto;margin:0}
-.chips label:has(input:checked){border-color:var(--accent);color:var(--accent)}
-.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:1px 8px;font-size:.75rem;color:var(--accent)}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.totals .card{margin:0;text-align:center;padding:16px 10px;background:linear-gradient(160deg,var(--surface2),var(--surface))}
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;margin:0 auto 6px;font-weight:800;font-size:1.1rem;color:#04201b}
+.big{font-size:1.55rem;font-weight:800;color:var(--warm);letter-spacing:-.02em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips label{display:flex;gap:6px;align-items:center;background:var(--surface2);border:1.5px solid var(--line);border-radius:99px;padding:8px 13px;font-size:.92rem;cursor:pointer;user-select:none}
+.chips input{display:none}
+.chips label:has(input:checked){border-color:var(--accent);background:rgba(94,234,212,.14);color:var(--accent);font-weight:600}
+.tag{display:inline-block;background:rgba(94,234,212,.12);border-radius:99px;padding:2px 9px;font-size:.75rem;color:var(--accent);font-weight:600}
+.item-ico{width:42px;height:42px;border-radius:13px;background:var(--surface2);display:grid;place-items:center;font-size:1.3rem;flex:none}
+.item-main{flex:1;min-width:0}
+.item-main b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.amt{font-weight:800;font-size:1.05rem}
 .hide{display:none!important}
-.warn{background:#3a2a12;border:1px solid #6b4a14;border-radius:10px;padding:12px;font-size:.9rem}
-.cust{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center}
-pre{white-space:pre-wrap;word-break:break-all;font-size:.7rem;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px;max-height:140px;overflow:auto}
-details summary{cursor:pointer;color:var(--soft);font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;margin:26px 0 8px}
+.warn{background:#3a2a12;border:1px solid #6b4a14;border-radius:14px;padding:12px;font-size:.9rem}
+.tick{display:flex;gap:10px;align-items:center;font-size:.92rem;color:var(--soft)}
+.tick input{width:20px;height:20px;padding:0;accent-color:var(--accent)}
+.cust{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center}
+.preview{background:var(--surface2);border-radius:12px;padding:10px 12px;font-size:.88rem;color:var(--ink)}
+.empty{text-align:center;padding:26px 10px;color:var(--soft)}
+.empty .e{font-size:2.2rem}
+pre{white-space:pre-wrap;word-break:break-all;font-size:.7rem;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;max-height:140px;overflow:auto}
+details summary{cursor:pointer;font-weight:700;margin:28px 0 10px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:" ▾";color:var(--soft)}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,80px);background:var(--accent);color:#04201b;font-weight:700;padding:11px 18px;border-radius:99px;transition:transform .25s;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:9}
+#toast.on{transform:translate(-50%,0)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="row"><h1>🏠 House Split</h1><button class="ghost hide" id="btnOut">Sign out</button></div>
+  <div class="row"><h1 id="hello">🏠 House Split</h1><button class="ghost hide" id="btnOut">Sign out</button></div>
   <div class="soft" id="status"></div>
 
   <div id="noconfig" class="warn hide" style="margin-top:12px">Firebase isn't configured yet. Paste your <code>firebaseConfig</code> into <code>FIREBASE_CONFIG</code> in <code>index.html</code> (see README).</div>
-  <div id="signin" class="hide" style="margin-top:16px"><div class="card"><button id="btnGoogle">Continue with Google</button></div></div>
+  <div id="signin" class="hide" style="margin-top:16px"><div class="card empty"><div class="e">🏠</div><p>Log what you paid, split it with Ashish &amp; Parth, and keep track of what's still to add in Splitwise.</p><button id="btnGoogle" class="big-btn">Continue with Google</button></div></div>
 
   <div id="app" class="hide">
-    <h2>Pending for Splitwise</h2>
+    <h2>💸 Still to add in Splitwise</h2>
     <div class="totals" id="totals"></div>
-    <div class="row" style="margin-top:10px"><span class="soft" id="pendCount"></span><button class="ghost" id="btnAll">✓ Mark all added</button></div>
+    <div class="row" style="margin-top:12px"><span class="soft" id="pendCount"></span><button class="ghost" id="btnAll">✓ Mark all added</button></div>
     <div id="pending" style="margin-top:8px"></div>
 
-    <h2>Log an expense</h2>
+    <h2>➕ New expense</h2>
     <div class="card"><form id="fExp">
-      <input id="eAmt" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="Total amount you paid (₹)" required>
-      <input id="eNote" placeholder="Short note (e.g. Blinkit milk + eggs)" maxlength="80">
+      <input id="eAmt" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="₹ How much did you pay?" style="font-size:1.2rem;font-weight:700" required>
+      <input id="eNote" placeholder="What was it for? (e.g. Blinkit milk + eggs)" maxlength="80">
+      <div class="lbl">Category</div>
       <div class="chips" id="eTag"></div>
       <input id="eDate" type="date" required>
-      <div class="soft">Split with</div>
+      <div class="lbl">Split with</div>
       <div class="chips" id="eWith"></div>
-      <label class="soft" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="eMe" checked style="width:auto"> I'm part of the split too (equal shares)</label>
-      <label class="soft" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="eCustom" style="width:auto"> Custom amounts</label>
+      <label class="tick"><input type="checkbox" id="eMe" checked> I'm part of the split too</label>
+      <label class="tick"><input type="checkbox" id="eCustom"> Custom amounts instead of equal</label>
       <div id="custom" class="hide" style="display:grid;gap:6px"></div>
-      <div class="soft" id="preview"></div>
-      <button>Add expense</button>
+      <div class="preview" id="preview"></div>
+      <button class="big-btn">Add expense</button>
     </form></div>
 
-    <details><summary>Already in Splitwise</summary><div id="done"></div></details>
+    <details><summary>✅ Already in Splitwise</summary><div id="done"></div></details>
 
-    <details><summary>iOS widget</summary>
+    <details><summary>📱 iOS widget</summary>
       <div class="card"><div class="soft" style="margin-bottom:8px">1. Install <b>Scriptable</b> (App Store). 2. New script → paste this → name it <b>HouseSplit</b>. 3. Add a Scriptable widget to your Home Screen → Script: HouseSplit.</div>
       <button id="btnCopy">Copy widget script</button><pre id="wScript"></pre></div>
     </details>
   </div>
 </div>
+<div id="toast"></div>
 
 <script type="module">
 /* Paste your Firebase web config here (Project settings → Your apps → Web). */
@@ -88,7 +108,9 @@ const FIREBASE_CONFIG = {
 };
 const FB_VERSION = "12.15.0";
 const FLATMATES = ["Ashish", "Parth"];
-const TAGS = ["Grocery", "Entertainment", "Online product", "Food & delivery", "Utilities", "Travel", "Other"];
+const TAGS = [["Grocery","🛒"],["Instahelp","🧹"],["Urban Company","🛠️"],["Entertainment","🎬"],["Online product","📦"],["Food & delivery","🍕"],["Utilities","💡"],["Travel","🚕"],["Other","✨"]];
+const EMOJI = Object.fromEntries(TAGS);
+const COLORS = ["#5eead4","#ffa98a","#c4b5fd","#fde68a"];
 
 const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('hide', !on);
@@ -122,7 +144,8 @@ try { await au.getRedirectResult(auth); } catch (e) { console.error(e); }
 au.onAuthStateChanged(auth, async u => {
   user = u; if (unsub) { unsub(); unsub = null; } expenses = [];
   show('signin', !u); show('app', !!u); show('btnOut', !!u);
-  $('status').textContent = u ? `Signed in as ${u.email}` : '';
+  $('status').textContent = u ? `Signed in as ${u.email}` : 'Split flat expenses without the awkward maths.';
+  $('hello').textContent = u ? `Hi ${(u.displayName || 'there').split(' ')[0]} 👋` : '🏠 House Split';
   if (!u) return;
   initForm();
   const prof = fs.doc(db, 'users', u.uid);
@@ -149,23 +172,27 @@ const owedTotals = list => {
 
 function render() {
   const pend = expenses.filter(x => !x.added), done = expenses.filter(x => x.added), t = owedTotals(pend);
-  $('totals').innerHTML = FLATMATES.map(n => `<div class="card"><div class="soft">${esc(n)} owes you</div><div class="big">${money(t[n])}</div></div>`).join('');
-  $('pendCount').textContent = pend.length ? `${pend.length} expense${pend.length > 1 ? 's' : ''} not in Splitwise yet` : 'Nothing pending 🎉';
+  $('totals').innerHTML = FLATMATES.map((n, i) => `<div class="card"><div class="av" style="background:${COLORS[i % 4]}">${esc(n[0])}</div><div class="soft">${esc(n)} owes you</div><div class="big">${money(t[n])}</div></div>`).join('');
+  $('pendCount').textContent = pend.length ? `${pend.length} expense${pend.length > 1 ? 's' : ''} waiting` : 'All caught up 🎉';
   show('btnAll', pend.length > 0);
-  $('pending').innerHTML = pend.map(x => item(x, false)).join('');
-  $('done').innerHTML = done.length ? done.map(x => item(x, true)).join('') : '<div class="soft">Nothing yet.</div>';
+  $('pending').innerHTML = pend.length ? pend.map(x => item(x, false)).join('') : '<div class="card empty"><div class="e">🎉</div>Nothing to add. Log a new expense below.</div>';
+  $('done').innerHTML = done.length ? done.map(x => item(x, true)).join('') : '<div class="empty">Nothing yet.</div>';
 }
 function item(x, isDone) {
   const owes = FLATMATES.filter(n => x.owes && x.owes[n] > 0).map(n => `${esc(n)} ${money(x.owes[n])}`).join(' · ');
-  return `<div class="card"><div class="row"><div><b>${esc(x.note || 'Expense')}</b> <span class="tag">${esc(x.tag || 'Other')}</span>
-    <div class="soft">${esc(x.date || '')} · paid ${money(x.amount)}</div><div class="soft">${owes || 'no one owes'}</div></div>
-    ${isDone ? `<button class="ghost" data-undo="${x.id}">Undo</button>` : `<button class="add" data-add="${x.id}">✓ Added</button>`}</div>
-    <div style="text-align:right"><button class="ghost" data-del="${x.id}" style="border:0;padding:2px 4px">delete</button></div></div>`;
+  const d = x.date ? new Date(x.date + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+  return `<div class="card"><div class="row"><div class="item-ico">${EMOJI[x.tag] || '✨'}</div>
+    <div class="item-main"><b>${esc(x.note || x.tag || 'Expense')}</b><div class="soft">${esc(x.tag || 'Other')} · ${d}</div></div>
+    <div style="text-align:right"><div class="amt">${money(x.amount)}</div><div class="soft">you paid</div></div></div>
+    <div class="soft" style="margin:8px 0 10px">${owes || 'Personal expense'}</div>
+    <div class="row"><button class="ghost" data-del="${x.id}">🗑 Delete</button>
+    ${isDone ? `<button class="ghost" data-undo="${x.id}">↩ Undo</button>` : `<button class="add" data-add="${x.id}">✓ Added to Splitwise</button>`}</div></div>`;
 }
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1800); };
 document.addEventListener('click', async e => {
   const t = e.target; if (!user || !t.dataset) return;
   const ref = id => fs.doc(db, 'users', user.uid, 'expenses', id);
-  if (t.dataset.add) await fs.updateDoc(ref(t.dataset.add), { added: true, addedAt: Date.now() });
+  if (t.dataset.add) { await fs.updateDoc(ref(t.dataset.add), { added: true, addedAt: Date.now() }); toast('Moved to Splitwise ✓'); }
   else if (t.dataset.undo) await fs.updateDoc(ref(t.dataset.undo), { added: false, addedAt: null });
   else if (t.dataset.del && confirm('Delete this expense?')) await fs.deleteDoc(ref(t.dataset.del));
 });
@@ -181,7 +208,7 @@ $('btnAll').onclick = async () => {
 let formReady = false;
 function initForm() {
   if (formReady) return; formReady = true;
-  $('eTag').innerHTML = TAGS.map((t, i) => `<label><input type="radio" name="tag" value="${esc(t)}" ${i ? '' : 'checked'}>${esc(t)}</label>`).join('');
+  $('eTag').innerHTML = TAGS.map(([t, e], i) => `<label><input type="radio" name="tag" value="${esc(t)}" ${i ? '' : 'checked'}>${e} ${esc(t)}</label>`).join('');
   $('eWith').innerHTML = FLATMATES.map(n => `<label><input type="checkbox" value="${esc(n)}" checked>${esc(n)}</label>`).join('');
   $('eDate').value = today();
   ['eAmt', 'eMe', 'eCustom', 'eWith'].forEach(id => $(id).addEventListener('input', updateSplit));
@@ -204,7 +231,7 @@ function updateSplit() {
     $('custom').innerHTML = sel.map(n => `<div class="cust"><span>${esc(n)} owes</span><input data-n="${esc(n)}" type="number" inputmode="decimal" step="0.01" min="0" value="${keep[n] ?? ''}"></div>`).join('');
   }
   const o = computeOwes();
-  $('preview').textContent = sel.length ? sel.map(n => `${n} owes ${money(o[n])}`).join(' · ') : 'Nobody selected — this will be a personal expense.';
+  $('preview').textContent = sel.length ? sel.map(n => `${n} owes you ${money(o[n])}`).join(' · ') : 'Nobody selected, so this is just a personal expense.';
 }
 $('fExp').onsubmit = async e => {
   e.preventDefault();
@@ -215,7 +242,7 @@ $('fExp').onsubmit = async e => {
     amount, note: $('eNote').value.trim(), tag: ($('eTag').querySelector('input:checked') || {}).value || 'Other',
     date: $('eDate').value, owes, added: false, createdAt: Date.now()
   });
-  $('eAmt').value = ''; $('eNote').value = ''; $('custom').querySelectorAll('input').forEach(i => i.value = ''); updateSplit();
+  $('eAmt').value = ''; $('eNote').value = ''; $('custom').querySelectorAll('input').forEach(i => i.value = ''); updateSplit(); toast('Expense added 🎉');
 };
 
 /* ---------- widget ---------- */
