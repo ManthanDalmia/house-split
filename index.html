@@ -291,7 +291,8 @@ async function publishSummary() {
   const pend = expenses.filter(x => !x.added), owed = owedTotals(pend);
   const key = JSON.stringify([owed, pend.length]);
   if (key === lastSummary) return; lastSummary = key;
-  try { await fs.setDoc(fs.doc(db, 'widgets', secret), { owner: user.uid, owed, pending: pend.length, updatedAt: Date.now() }); }
+  try { await fs.setDoc(fs.doc(db, 'widgets', secret), { owner: user.uid, owed, pending: pend.length, updatedAt: Date.now(),
+      summary: FLATMATES.map(n => `${n} owes ${money(owed[n])}`).join('\n') + `\n${pend.length} pending` }); }
   catch (e) { console.error('widget summary failed', e); }
 }
 function widgetScript() {
